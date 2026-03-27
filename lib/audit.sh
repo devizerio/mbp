@@ -23,7 +23,7 @@ audit_homebrew() {
 
     # brew bundle check returns non-zero if anything is missing
     local missing_output
-    if ! missing_output=$(brew bundle check --file="$bfpath" --no-lock 2>&1); then
+    if ! missing_output=$(brew bundle check --file="$bfpath" 2>&1); then
       # Parse missing packages from output
       echo "$missing_output" | grep "^The following" -A 999 | grep "^  " | \
         sed 's/^  //' | while IFS= read -r pkg; do
