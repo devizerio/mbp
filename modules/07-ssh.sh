@@ -19,7 +19,9 @@ for key in "$SSH_DIR"/*; do
   [[ "$(basename "$key")" == "config"* ]] && continue
   [[ "$(basename "$key")" == "environment" ]] && continue
 
-  chmod 600 "$key"
+  if ! chmod 600 "$key"; then
+    mbp_log_warn "failed to set permissions on $(basename "$key")"
+  fi
   KEY_COUNT=$((KEY_COUNT + 1))
   mbp_log_step "permissions 600: $(basename "$key")"
 
@@ -36,6 +38,22 @@ for key in "$SSH_DIR"/*; do
   esac
 done
 
+# Warn about weak key types
+if [ -n "$GITHUB_KEY" ] && [ -f "${GITHUB_KEY}.pub" ]; then
+  KEY_TYPE=$(ssh-keygen -l -f "${GITHUB_KEY}.pub" 2>/dev/null | awk '{print $4}' | tr -d '()')
+  KEY_BITS=$(ssh-keygen -l -f "${GITHUB_KEY}.pub" 2>/dev/null | awk '{print $1}')
+  case "$KEY_TYPE" in
+    DSA)
+      mbp_log_warn "SSH key $(basename "$GITHUB_KEY") uses DSA which is deprecated — generate an ed25519 key"
+      ;;
+    RSA)
+      if [ "${KEY_BITS:-0}" -lt 3072 ]; then
+        mbp_log_warn "SSH key $(basename "$GITHUB_KEY") is RSA ${KEY_BITS}-bit — consider ed25519 or RSA 4096"
+      fi
+      ;;
+  esac
+fi
+
 # Ensure config.d directory for per-client/per-project includes
 mkdir -p "${SSH_DIR}/config.d"
 
@@ -47,7 +65,7 @@ if [ -n "$GITHUB_KEY" ]; then
 Host github.com
     HostName github.com
     User git
-    IdentityFile ${GITHUB_KEY}
+    IdentityFile "${GITHUB_KEY}"
 EOF
   mbp_log_ok "GitHub SSH: using $(basename "$GITHUB_KEY")"
 elif [ ! -f "$GITHUB_CONF" ]; then

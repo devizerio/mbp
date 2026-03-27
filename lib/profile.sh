@@ -34,9 +34,15 @@ profile_load() {
         fi
         ;;
       modules)
-        # Split on commas, trim each value
+        # Split on commas, trim each value, validate names (alphanumeric + hyphens only)
         MBP_PROFILE_MODULES=$(echo "$raw_val" | tr ',' '\n' | \
           sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | tr '\n' ' ' | sed 's/ $//')
+        for _mod in $MBP_PROFILE_MODULES; do
+          if ! echo "$_mod" | grep -qE '^[a-zA-Z0-9_-]+$'; then
+            printf "profile: invalid module name '%s' — only alphanumeric, hyphens, underscores allowed\n" "$_mod" >&2
+            return 1
+          fi
+        done
         ;;
       brewfiles)
         MBP_PROFILE_BREWFILES=$(echo "$raw_val" | tr ',' '\n' | \

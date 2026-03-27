@@ -28,7 +28,7 @@ else
   else
     mbp_log_warn "npm not found — install node (module 04) and re-run"
     state_set_module_error "ai-tools" "1" "npm not available for Claude Code install"
-    exit 1
+    return 1
   fi
 fi
 
