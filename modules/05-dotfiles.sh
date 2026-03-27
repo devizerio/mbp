@@ -34,17 +34,22 @@ link_dotfile() {
     return
   fi
 
-  # Backup existing non-symlink file
+  # Ensure parent directory exists
+  mkdir -p "$(dirname "$dst")"
+
+  # Backup existing regular file atomically (copy then link in one step)
   if [ -f "$dst" ] && [ ! -L "$dst" ]; then
     mkdir -p "$BACKUP_DIR"
     cp "$dst" "$BACKUP_DIR/$(basename "$dst")"
     mbp_log_step "backed up: ~/${dst_name} → $BACKUP_DIR"
   fi
 
-  # Ensure parent directory exists
-  mkdir -p "$(dirname "$dst")"
-
-  ln -sf "$src" "$dst"
+  # Atomic symlink: create temp link then rename over destination
+  local tmp_link
+  tmp_link=$(mktemp "${dst}.mbp.XXXXXX")
+  rm -f "$tmp_link"
+  ln -s "$src" "$tmp_link"
+  mv -f "$tmp_link" "$dst"
   mbp_log_ok "linked: ~/${dst_name}"
   LINKED=$((LINKED + 1))
 }

@@ -21,9 +21,10 @@ fi
 # Ensure Homebrew zsh is in /etc/shells
 ZSH_BIN="$(brew --prefix 2>/dev/null)/bin/zsh"
 if [ -f "$ZSH_BIN" ]; then
-  if ! grep -qF "$ZSH_BIN" /etc/shells 2>/dev/null; then
+  # Validate the path contains no newlines or special characters before writing to /etc/shells
+  if [[ "$ZSH_BIN" =~ ^[a-zA-Z0-9/_.-]+$ ]] && ! grep -qF "$ZSH_BIN" /etc/shells 2>/dev/null; then
     mbp_log_step "Adding Homebrew zsh to /etc/shells..."
-    echo "$ZSH_BIN" | sudo tee -a /etc/shells >/dev/null
+    printf '%s\n' "$ZSH_BIN" | sudo tee -a /etc/shells >/dev/null
   fi
 
   # Change default shell if needed

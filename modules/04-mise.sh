@@ -34,9 +34,11 @@ for tool_spec in $MISE_TOOLS; do
   tool_name="${tool_spec%%@*}"
   tool_version="${tool_spec#*@}"
   mbp_log_step "Ensuring ${tool_name}@${tool_version}..."
-  mise install "${tool_spec}" 2>&1 | grep -v "^mise " | tail -3 | while IFS= read -r line; do
+  if ! mise install "${tool_spec}" 2>&1 | grep -v "^mise " | tail -3 | while IFS= read -r line; do
     [ -n "$line" ] && mbp_log_step "$line"
-  done
+  done; then
+    mbp_log_warn "mise install ${tool_spec} may have failed"
+  fi
   mise use --global "${tool_spec}" 2>/dev/null || true
 done
 

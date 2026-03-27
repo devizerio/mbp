@@ -74,6 +74,13 @@ mbp_log_step "Activity Monitor..."
 apply_default "com.apple.ActivityMonitor" "OpenMainWindow" "bool" "true"
 apply_default "com.apple.ActivityMonitor" "ShowCategory"   "int"  "0"
 
+mbp_log_step "Security..."
+# Enable macOS firewall
+sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate on 2>/dev/null || true
+# Require password immediately after sleep/screen saver
+apply_default "com.apple.screensaver" "askForPassword"      "int" "1"
+apply_default "com.apple.screensaver" "askForPasswordDelay"  "int" "0"
+
 # Restart affected system processes
 mbp_log_step "Restarting system services..."
 killall Dock    2>/dev/null || true

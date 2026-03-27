@@ -9,6 +9,19 @@ MBP_STATE_TXT="${MBP_STATE_DIR}/state.txt"
 MBP_STATE_SCHEMA_VERSION=1
 
 mkdir -p "$MBP_STATE_DIR"
+chmod 700 "$MBP_STATE_DIR"
+
+# Track temp files for cleanup on exit
+_MBP_STATE_TMPFILES=()
+_mbp_state_cleanup() { rm -f "${_MBP_STATE_TMPFILES[@]}" 2>/dev/null; }
+trap _mbp_state_cleanup EXIT
+
+# Safe mktemp that registers for cleanup
+_mbp_mktemp() {
+  local f; f=$(mktemp)
+  _MBP_STATE_TMPFILES+=("$f")
+  echo "$f"
+}
 
 # === Plain-text state (modules 01-02) ===
 # Format: module=status:exit_code:timestamp
@@ -93,7 +106,7 @@ state_migrate_from_txt() {
       extra=$(jq -n --argjson count "$pkg_count" '{"packages": $count}')
     fi
 
-    local tmp; tmp=$(mktemp)
+    local tmp; tmp=$(_mbp_mktemp)
     jq --arg module "$module" \
        --arg status "$status" \
        --argjson exit_code "${exit_code:-0}" \
@@ -113,7 +126,7 @@ state_set_module_ok() {
   command -v jq >/dev/null 2>&1 || return 1
   [ -f "$MBP_STATE_JSON" ] || state_init_json
   local ts; ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-  local tmp; tmp=$(mktemp)
+  local tmp; tmp=$(_mbp_mktemp)
   jq --arg module "$module" --arg ts "$ts" \
     '.modules[$module] = (.modules[$module] // {} | . + {status: "ok", exit_code: 0, ran_at: $ts})' \
     "$MBP_STATE_JSON" > "$tmp" && mv "$tmp" "$MBP_STATE_JSON"
@@ -124,7 +137,7 @@ state_set_module_error() {
   command -v jq >/dev/null 2>&1 || return 1
   [ -f "$MBP_STATE_JSON" ] || state_init_json
   local ts; ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-  local tmp; tmp=$(mktemp)
+  local tmp; tmp=$(_mbp_mktemp)
   jq --arg module "$module" --arg ts "$ts" \
      --argjson exit_code "$exit_code" --arg error "$error_msg" \
     '.modules[$module] = (.modules[$module] // {} | . + {status: "error", exit_code: $exit_code, ran_at: $ts, error: $error})' \
@@ -135,7 +148,7 @@ state_set_module_meta() {
   local module="$1" key="$2" value="$3"
   command -v jq >/dev/null 2>&1 || return 1
   [ -f "$MBP_STATE_JSON" ] || return 1
-  local tmp; tmp=$(mktemp)
+  local tmp; tmp=$(_mbp_mktemp)
   # value may be a JSON fragment (array, number) or a plain string
   if echo "$value" | jq . >/dev/null 2>&1; then
     jq --arg module "$module" --arg key "$key" --argjson val "$value" \
@@ -165,7 +178,7 @@ state_set_profile() {
   local profile="$1"
   command -v jq >/dev/null 2>&1 || return 1
   [ -f "$MBP_STATE_JSON" ] || state_init_json "$profile"
-  local tmp; tmp=$(mktemp)
+  local tmp; tmp=$(_mbp_mktemp)
   jq --arg profile "$profile" '.profile = $profile' "$MBP_STATE_JSON" > "$tmp" && mv "$tmp" "$MBP_STATE_JSON"
 }
 
@@ -173,7 +186,7 @@ state_set_last_run() {
   command -v jq >/dev/null 2>&1 || return 1
   [ -f "$MBP_STATE_JSON" ] || return 1
   local ts; ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-  local tmp; tmp=$(mktemp)
+  local tmp; tmp=$(_mbp_mktemp)
   jq --arg ts "$ts" '.last_run = $ts' "$MBP_STATE_JSON" > "$tmp" && mv "$tmp" "$MBP_STATE_JSON"
 }
 
@@ -207,7 +220,7 @@ state_check_schema() {
     printf "state: schema v%s detected, expected v%s — migrating...\n" \
       "$current_schema" "$MBP_STATE_SCHEMA_VERSION"
     # Future migration functions go here
-    local tmp; tmp=$(mktemp)
+    local tmp; tmp=$(_mbp_mktemp)
     jq --argjson v "$MBP_STATE_SCHEMA_VERSION" '.schema_version = $v' \
       "$MBP_STATE_JSON" > "$tmp" && mv "$tmp" "$MBP_STATE_JSON"
   fi
