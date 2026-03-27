@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 # install.sh — Bootstrap mbp on a fresh Mac
 # Usage: bash <(curl -fsSL https://raw.githubusercontent.com/devizerio/mbp/main/install.sh)
+#
+# Security note: This script is fetched over HTTPS from GitHub. It trusts:
+#   - GitHub's TLS infrastructure for transport security
+#   - The devizerio/mbp repository for code integrity
+# For additional verification, download first and inspect:
+#   curl -fsSL https://raw.githubusercontent.com/devizerio/mbp/main/install.sh -o install.sh
+#   shasum -a 256 install.sh   # compare with published hash
+#   bash install.sh
 set -euo pipefail
 
 MBP_REPO="${MBP_REPO:-$HOME/.mbp/repo}"

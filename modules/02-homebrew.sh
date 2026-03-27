@@ -37,8 +37,10 @@ for bf in $BREWFILES; do
   BFPATH="$BREWFILE_DIR/Brewfile.$bf"
   if [ -f "$BFPATH" ]; then
     mbp_log_step "Bundling: Brewfile.$bf"
-    brew bundle --file="$BFPATH" --no-upgrade 2>&1 | \
-      grep -v "^Using " | grep -v "^Homebrew Bundle complete" || true
+    if ! brew bundle --file="$BFPATH" --no-upgrade 2>&1 | \
+      grep -v "^Using " | grep -v "^Homebrew Bundle complete"; then
+      mbp_log_warn "brew bundle returned non-zero for Brewfile.$bf — some packages may have failed"
+    fi
   else
     mbp_log_warn "Brewfile.$bf not found, skipping"
   fi

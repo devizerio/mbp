@@ -158,9 +158,27 @@ audit_macos_defaults() {
   # Parse apply_default lines: apply_default "domain" "key" "type" "value"
   while IFS= read -r line; do
     local domain key type expected_value
-    # Extract quoted args using parameter expansion
-    eval "set -- $(echo "$line" | sed 's/apply_default //')" 2>/dev/null || continue
-    domain="$1" key="$2" type="$3" expected_value="$4"
+    # Safely extract quoted args without eval
+    local args_str
+    args_str=$(echo "$line" | sed 's/^[[:space:]]*apply_default[[:space:]]*//')
+    # Parse space-separated quoted arguments safely using read
+    local -a args=()
+    while [[ -n "$args_str" ]]; do
+      args_str="${args_str#"${args_str%%[![:space:]]*}"}"  # trim leading space
+      [ -z "$args_str" ] && break
+      if [[ "$args_str" == \"* ]]; then
+        # Quoted argument — extract up to closing quote
+        args_str="${args_str#\"}"
+        args+=("${args_str%%\"*}")
+        args_str="${args_str#*\"}"
+      else
+        # Unquoted argument
+        args+=("${args_str%% *}")
+        args_str="${args_str#* }"
+        [[ "$args_str" == "${args[${#args[@]}-1]}" ]] && args_str=""
+      fi
+    done
+    domain="${args[0]:-}" key="${args[1]:-}" type="${args[2]:-}" expected_value="${args[3]:-}"
 
     [ -z "$domain" ] || [ -z "$key" ] && continue
 

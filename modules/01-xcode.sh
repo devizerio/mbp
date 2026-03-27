@@ -30,7 +30,9 @@ until xcode-select -p >/dev/null 2>&1; do
 done
 
 # Accept license
-sudo xcodebuild -license accept 2>/dev/null || true
+if ! sudo xcodebuild -license accept 2>/dev/null; then
+  mbp_log_warn "Could not auto-accept Xcode license — you may need to run: sudo xcodebuild -license accept"
+fi
 
 mbp_log_ok "Xcode Command Line Tools installed: $(xcode-select -p)"
 state_txt_set "xcode" "ok" "0"
