@@ -31,6 +31,9 @@ if /usr/libexec/java_home &>/dev/null; then
   export JAVA_HOME=$(/usr/libexec/java_home)
 fi
 
+# ─── GPG ────────────────────────────────────────────────────────────────────
+export GPG_TTY=$(tty)
+
 # ─── Locale ──────────────────────────────────────────────────────────────────
 export LANG="en_US.UTF-8"
 export LC_ALL="en_US.UTF-8"

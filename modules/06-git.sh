@@ -33,6 +33,19 @@ GPG_KEY_ID=$(gpg --list-secret-keys --keyid-format SHORT 2>/dev/null | \
 if [ -n "$GPG_KEY_ID" ]; then
   git config --global user.signingkey "$GPG_KEY_ID"
   git config --global commit.gpgsign true
+  git config --global gpg.program "$(which gpg)"
+
+  # Configure pinentry-mac for passphrase entry if available
+  PINENTRY_MAC="${BREW_PREFIX}/bin/pinentry-mac"
+  if [ -f "$PINENTRY_MAC" ]; then
+    GPG_AGENT_CONF="$HOME/.gnupg/gpg-agent.conf"
+    if ! grep -q "pinentry-program.*pinentry-mac" "$GPG_AGENT_CONF" 2>/dev/null; then
+      echo "pinentry-program ${PINENTRY_MAC}" >> "$GPG_AGENT_CONF"
+      gpgconf --kill gpg-agent 2>/dev/null
+      mbp_log_ok "pinentry-mac configured for GPG agent"
+    fi
+  fi
+
   mbp_log_ok "GPG signing enabled: $GPG_KEY_ID"
 else
   mbp_log_warn "No GPG key found — run 'mbp setup --module secrets' to enable commit signing"
