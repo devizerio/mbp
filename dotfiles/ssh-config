@@ -3,15 +3,8 @@
 
 Host *
     AddKeysToAgent yes
-    # 1Password SSH Agent (Secretive)
-    IdentityAgent "~/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
     ServerAliveInterval 60
     ServerAliveCountMax 3
-
-Host github.com
-    HostName github.com
-    User git
-    IdentityFile ~/.ssh/developer_ed25519
 
 # Per-project/client overrides
 Include ~/.ssh/config.d/*.conf
