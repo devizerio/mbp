@@ -1,0 +1,25 @@
+name: version-check
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  version-bump:
+    name: Version Bump Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check VERSION was bumped
+        run: |
+          if git diff origin/main...HEAD --quiet -- VERSION; then
+            echo "::error::VERSION file was not changed. Please bump the version before merging."
+            echo ""
+            echo "Update the VERSION file with the new version number."
+            echo "See https://semver.org for versioning guidance."
+            exit 1
+          fi
+          echo "VERSION was bumped. ✓"
