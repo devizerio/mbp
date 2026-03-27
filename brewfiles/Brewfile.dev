@@ -6,9 +6,6 @@ brew "mise"                # Modern asdf replacement (10x faster)
 # JavaScript / Node
 brew "bun"                 # Bun runtime (also managed via mise)
 
-# GPG
-brew "pinentry-mac"        # macOS-native GPG passphrase dialog
-
 # Build tools
 brew "watchman"            # File watching (React Native, Jest)
 
