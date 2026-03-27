@@ -16,6 +16,6 @@
 [credential "https://gist.github.com"]
 	helper =
 	helper = !/opt/homebrew/bin/gh auth git-credential
-# GPG signing is configured by module 06 (git) if a key is present.
+# SSH commit signing is configured by module 06 (git) if a key is present.
 # Client-specific git identities are added by: mbp client add <name>
 # which appends [includeIf] blocks below this line.

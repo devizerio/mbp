@@ -25,30 +25,32 @@ else
   mbp_log_warn "gh CLI not found — skipping credential helper setup"
 fi
 
-# GPG signing: configure only if a key exists
-# Module 08 (secrets) restores keys; this module picks them up if already present.
-GPG_KEY_ID=$(gpg --list-secret-keys --keyid-format SHORT 2>/dev/null | \
-  grep "^sec" | awk '{print $2}' | cut -d/ -f2 | head -1)
+# SSH commit signing: uses the SSH key discovered by module 07
+# No GPG or pinentry needed — 1Password handles key access seamlessly.
+SSH_DIR="${HOME}/.ssh"
+SSH_SIGNING_KEY=""
 
-if [ -n "$GPG_KEY_ID" ]; then
-  git config --global user.signingkey "$GPG_KEY_ID"
-  git config --global commit.gpgsign true
-  git config --global gpg.program "$(which gpg)"
-
-  # Configure pinentry-mac for passphrase entry if available
-  PINENTRY_MAC="${BREW_PREFIX}/bin/pinentry-mac"
-  if [ -f "$PINENTRY_MAC" ]; then
-    GPG_AGENT_CONF="$HOME/.gnupg/gpg-agent.conf"
-    if ! grep -q "pinentry-program.*pinentry-mac" "$GPG_AGENT_CONF" 2>/dev/null; then
-      echo "pinentry-program ${PINENTRY_MAC}" >> "$GPG_AGENT_CONF"
-      gpgconf --kill gpg-agent 2>/dev/null
-      mbp_log_ok "pinentry-mac configured for GPG agent"
-    fi
+# Use the same key-discovery priority as module 07
+for key in "$SSH_DIR"/*.pub; do
+  [ -f "$key" ] || continue
+  local_name="$(basename "$key" .pub)"
+  if [ -z "$SSH_SIGNING_KEY" ]; then
+    SSH_SIGNING_KEY="$key"
   fi
+  case "$local_name" in
+    developer_ed25519) SSH_SIGNING_KEY="$key" ;;
+    id_ed25519)        [[ "$(basename "$SSH_SIGNING_KEY" .pub)" != "developer_ed25519" ]] && SSH_SIGNING_KEY="$key" ;;
+    *ed25519*)         [[ "$(basename "$SSH_SIGNING_KEY" .pub)" != "developer_ed25519" && "$(basename "$SSH_SIGNING_KEY" .pub)" != "id_ed25519" ]] && SSH_SIGNING_KEY="$key" ;;
+  esac
+done
 
-  mbp_log_ok "GPG signing enabled: $GPG_KEY_ID"
+if [ -n "$SSH_SIGNING_KEY" ]; then
+  git config --global gpg.format ssh
+  git config --global user.signingkey "$SSH_SIGNING_KEY"
+  git config --global commit.gpgsign true
+  mbp_log_ok "SSH commit signing enabled: $(basename "$SSH_SIGNING_KEY")"
 else
-  mbp_log_warn "No GPG key found — run 'mbp setup --module secrets' to enable commit signing"
+  mbp_log_warn "No SSH public key found — commit signing requires a key in ~/.ssh/"
 fi
 
 state_set_module_ok "git"
