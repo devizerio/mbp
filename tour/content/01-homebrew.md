@@ -27,9 +27,9 @@ Your active profile controls which Brewfiles are used.
 
   mbp audit              — checks for Brewfile drift
 
-## Lock-free installs
+## Fast installs
 
-mbp runs `brew bundle --no-lock --no-upgrade` so installs are fast and
+mbp runs `brew bundle --no-upgrade` so installs are fast and
 idempotent. Run `mbp setup` again anytime — already-installed packages
 are skipped.
 

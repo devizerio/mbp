@@ -11,6 +11,9 @@ plugins=(git)
 export PATH="$HOME/.local/bin:$PATH"
 export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:$PATH"
 
+# mbp CLI
+[ -d "$HOME/.mbp/repo/bin" ] && export PATH="$HOME/.mbp/repo/bin:$PATH"
+
 # Bun
 [ -d "$HOME/.bun/bin" ] && export PATH="$HOME/.bun/bin:$PATH"
 
