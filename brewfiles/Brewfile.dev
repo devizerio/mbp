@@ -1,0 +1,37 @@
+# Brewfile.dev — Development toolchain
+
+# Version management
+brew "mise"                # Modern asdf replacement (10x faster)
+
+# JavaScript / Node
+brew "bun"                 # Bun runtime (also managed via mise)
+
+# Build tools
+brew "watchman"            # File watching (React Native, Jest)
+
+# Databases
+brew "redis"               # Local Redis
+
+# Cloud / infrastructure
+brew "azure-cli"           # az
+brew "doctl"               # DigitalOcean
+brew "terraform"
+brew "heroku"
+brew "s3cmd"
+brew "stripe"
+
+# Media processing
+brew "ffmpeg"
+brew "imagemagick"
+brew "vips"                # libvips (sharp dependency)
+brew "tesseract"           # OCR
+
+# IoT / hardware
+brew "librtlsdr"           # RTL-SDR support
+brew "rtl_433"             # RTL-SDR protocol decoder
+
+# Android development
+brew "scrcpy"              # Android screen mirroring
+
+# Dev casks
+cask "docker"              # Docker Desktop

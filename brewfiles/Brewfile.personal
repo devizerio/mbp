@@ -1,0 +1,4 @@
+# Brewfile.personal — Jensen's personal extras
+# Not included in client-minimal profile.
+
+brew "blueutil"            # Bluetooth CLI control

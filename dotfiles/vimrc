@@ -1,0 +1,14 @@
+" ~/.vimrc — Managed by mbp
+set nocompatible
+syntax on
+set number
+set tabstop=2
+set shiftwidth=2
+set expandtab
+set autoindent
+set hlsearch
+set incsearch
+set ruler
+set showcmd
+set wildmenu
+set backspace=indent,eol,start

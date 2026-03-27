@@ -1,0 +1,8 @@
+# Brewfile.ai — AI-native tooling dependencies
+# Claude Code itself is installed via npm in module 10.
+# This file contains brew-installable supporting tools.
+
+# jq is already in Brewfile.core; brew bundle is idempotent
+brew "jq"
+
+# Future: additional AI tooling deps go here

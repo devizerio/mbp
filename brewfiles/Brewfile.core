@@ -1,0 +1,26 @@
+# Brewfile.core — Essential tools required by mbp and all profiles
+tap "homebrew/bundle"
+
+# CLI essentials
+brew "coreutils"           # GNU coreutils (gdate, gls, etc.)
+brew "curl"
+brew "wget"
+brew "git"
+brew "gh"                  # GitHub CLI
+brew "jq"                  # JSON processor — required by mbp state.sh
+brew "gnupg"               # GPG for signing
+brew "rcm"                 # Dotfile management
+brew "mkcert"              # Local TLS certificates
+brew "the_silver_searcher" # ag — fast code search
+brew "universal-ctags"
+brew "tmux"
+brew "vim"
+brew "pstree"
+
+# Compression / archive
+brew "xz"
+brew "zstd"
+
+# Networking
+brew "openssh"
+brew "openssl@3"
