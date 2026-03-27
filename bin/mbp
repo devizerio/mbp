@@ -1,0 +1,217 @@
+#!/usr/bin/env bash
+# mbp — The Living Machine
+# Devizer MacBook Pro provisioning and maintenance tool.
+# https://github.com/devizerio/mbp
+
+# Resolve the repo directory regardless of where bin/mbp is called from
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MBP_REPO="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Source libraries
+source "$MBP_REPO/lib/core.sh"
+source "$MBP_REPO/lib/platform.sh"
+source "$MBP_REPO/lib/state.sh"
+source "$MBP_REPO/lib/profile.sh"
+
+MBP_VERSION="$(<"$MBP_REPO/VERSION")"
+
+# === Usage ===
+usage() {
+  printf "${MBP_COLOR_BRAND}${MBP_COLOR_BOLD}mbp${MBP_COLOR_RESET} v%s — The Living Machine by Devizer\n\n" "$MBP_VERSION"
+  printf "Usage: mbp <command> [options]\n\n"
+  printf "Commands:\n"
+  printf "  ${MBP_COLOR_BOLD}setup${MBP_COLOR_RESET} [--profile NAME] [--module NAME] [--force]\n"
+  printf "                         Provision this machine (default profile: devizer-full)\n"
+  printf "  ${MBP_COLOR_BOLD}audit${MBP_COLOR_RESET}                  Check for drift from canonical config\n"
+  printf "  ${MBP_COLOR_BOLD}tour${MBP_COLOR_RESET}                   Interactive walkthrough of installed tools\n"
+  printf "  ${MBP_COLOR_BOLD}update${MBP_COLOR_RESET}                 Self-update mbp repo and optionally re-setup\n"
+  printf "  ${MBP_COLOR_BOLD}status${MBP_COLOR_RESET}                 Show profile, module states, and last run\n"
+  printf "\nOptions:\n"
+  printf "  --profile NAME   Profile to use (default: devizer-full)\n"
+  printf "  --module NAME    Run only this module (e.g., --module mise)\n"
+  printf "  --force          Re-run modules even if already marked ok\n"
+  printf "  --version        Print version and exit\n"
+  printf "\nExamples:\n"
+  printf "  mbp setup\n"
+  printf "  mbp setup --profile client-minimal\n"
+  printf "  mbp setup --module mise --force\n"
+  printf "  mbp audit\n"
+  printf "\n"
+}
+
+# === cmd_setup ===
+cmd_setup() {
+  local profile="devizer-full"
+  local single_module=""
+  export MBP_FORCE=0
+
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --profile) profile="$2"; shift 2 ;;
+      --module)  single_module="$2"; shift 2 ;;
+      --force)   export MBP_FORCE=1; shift ;;
+      *) printf "Unknown option: %s\n" "$1" >&2; usage; exit 1 ;;
+    esac
+  done
+
+  mbp_print_logo
+  printf "Profile: ${MBP_COLOR_BRAND}%s${MBP_COLOR_RESET}\n" "$profile"
+
+  # Load profile
+  local profile_path="$MBP_REPO/profiles/${profile}.conf"
+  profile_load "$profile_path" || exit 1
+  state_init_json "$profile" "$MBP_VERSION"
+  state_set_profile "$profile"
+  state_set_last_run
+
+  local setup_start; setup_start=$(date +%s)
+
+  if [ -n "$single_module" ]; then
+    # Single-module mode
+    export MBP_FORCE=1  # Always force for explicit --module
+    local module_path
+    module_path=$(profile_resolve_module_path "$single_module" "$MBP_REPO") || exit 1
+    mbp_run_module "$module_path" 1 1
+  else
+    # Full setup: run all profile modules in order
+    # Build ordered list by expanding profile module names to paths
+    local module_paths=()
+    for module_name in $MBP_PROFILE_MODULES; do
+      local path
+      path=$(profile_resolve_module_path "$module_name" "$MBP_REPO") || continue
+      module_paths+=("$path")
+    done
+
+    local total="${#module_paths[@]}"
+    local n=0
+    for module_path in "${module_paths[@]}"; do
+      n=$((n + 1))
+      # Pass profile env vars to module subprocess via exports
+      export MBP_PROFILE_MODULES MBP_PROFILE_BREWFILES MBP_PROFILE_MISE_TOOLS
+      export MBP_REPO MBP_FORCE
+      mbp_run_module "$module_path" "$n" "$total"
+    done
+  fi
+
+  mbp_print_summary "$setup_start"
+
+  if [ -n "$MBP_FAILED_MODULES" ]; then
+    exit 1
+  fi
+}
+
+# === cmd_audit ===
+cmd_audit() {
+  source "$MBP_REPO/lib/audit.sh"
+
+  # Load active profile for context
+  local profile; profile=$(state_get_profile 2>/dev/null || echo "devizer-full")
+  profile_load "$MBP_REPO/profiles/${profile}.conf" 2>/dev/null || true
+
+  printf "${MBP_COLOR_BRAND}${MBP_COLOR_BOLD}mbp audit${MBP_COLOR_RESET} — checking against profile: %s\n" "$profile"
+
+  audit_homebrew "$MBP_REPO"
+  audit_mise
+  audit_dotfiles "$MBP_REPO"
+  audit_macos_defaults "$MBP_REPO"
+  audit_summary
+}
+
+# === cmd_tour ===
+cmd_tour() {
+  source "$MBP_REPO/lib/state.sh"
+  bash "$MBP_REPO/tour/steps.sh"
+}
+
+# === cmd_update ===
+cmd_update() {
+  printf "${MBP_COLOR_BRAND}${MBP_COLOR_BOLD}mbp update${MBP_COLOR_RESET}\n\n"
+
+  # Phase 1: Update repo
+  printf "Fetching latest changes...\n"
+  local old_version="$MBP_VERSION"
+  local old_head; old_head=$(git -C "$MBP_REPO" rev-parse HEAD 2>/dev/null)
+
+  if ! git -C "$MBP_REPO" pull --ff-only 2>&1; then
+    mbp_log_error "git pull failed. Ensure no local changes: git -C ~/.mbp/repo stash"
+    exit 1
+  fi
+
+  # Check schema migration
+  state_check_schema
+
+  local new_version; new_version=$(<"$MBP_REPO/VERSION")
+  local new_head; new_head=$(git -C "$MBP_REPO" rev-parse HEAD 2>/dev/null)
+
+  if [ "$old_head" = "$new_head" ]; then
+    mbp_log_ok "Already up to date (v${new_version})"
+    return 0
+  fi
+
+  mbp_log_ok "Updated: v${old_version} → v${new_version}"
+  printf "\n"
+
+  # Show changelog
+  if [ -f "$MBP_REPO/CHANGELOG.md" ]; then
+    printf "${MBP_COLOR_BOLD}What's new:${MBP_COLOR_RESET}\n"
+    git -C "$MBP_REPO" log --oneline "${old_head}..HEAD" 2>/dev/null | head -20 | \
+      sed 's/^/  • /'
+  fi
+
+  printf "\n"
+  printf "Phase 2: Re-run setup? [y/N] "
+  read -r response
+  if [[ "$response" =~ ^[Yy]$ ]]; then
+    cmd_setup
+  else
+    printf "Skipped. Run ${MBP_COLOR_BRAND}mbp setup${MBP_COLOR_RESET} when ready.\n"
+  fi
+}
+
+# === cmd_status ===
+cmd_status() {
+  printf "\n${MBP_COLOR_BRAND}${MBP_COLOR_BOLD}mbp status${MBP_COLOR_RESET} v%s\n\n" "$MBP_VERSION"
+
+  if [ ! -f "$MBP_STATE_JSON" ]; then
+    printf "  No state found. Run ${MBP_COLOR_BRAND}mbp setup${MBP_COLOR_RESET} to get started.\n\n"
+    return 0
+  fi
+
+  local profile; profile=$(state_get_profile)
+  local last_run; last_run=$(jq -r '.last_run // "never"' "$MBP_STATE_JSON" 2>/dev/null)
+  local ok_count; ok_count=$(jq '[.modules[] | select(.status == "ok")] | length' "$MBP_STATE_JSON" 2>/dev/null || echo 0)
+  local error_count; error_count=$(jq '[.modules[] | select(.status == "error")] | length' "$MBP_STATE_JSON" 2>/dev/null || echo 0)
+  local total_count; total_count=$(jq '.modules | length' "$MBP_STATE_JSON" 2>/dev/null || echo 0)
+  printf "  ${MBP_COLOR_DIM}Profile:${MBP_COLOR_RESET}    %s\n" "${profile:-unknown}"
+  printf "  ${MBP_COLOR_DIM}Last run:${MBP_COLOR_RESET}   %s\n" "$last_run"
+  printf "  ${MBP_COLOR_DIM}Modules:${MBP_COLOR_RESET}    %s/%s ok" "$ok_count" "$total_count"
+  [ "$error_count" -gt 0 ] && printf ", ${MBP_COLOR_ERROR}%s error${MBP_COLOR_RESET}" "$error_count"
+  printf "\n"
+
+  if [ "$error_count" -gt 0 ]; then
+    printf "\n  ${MBP_COLOR_WARN}Failed modules:${MBP_COLOR_RESET}\n"
+    jq -r '.modules | to_entries[] | select(.value.status == "error") | "    • \(.key): \(.value.error // "unknown error")"' \
+      "$MBP_STATE_JSON" 2>/dev/null
+  fi
+
+  printf "\n"
+}
+
+# === Main entry point ===
+main() {
+  local command="${1:-}"
+  shift || true
+
+  case "$command" in
+    setup)   cmd_setup "$@" ;;
+    audit)   cmd_audit "$@" ;;
+    tour)    cmd_tour "$@" ;;
+    update)  cmd_update "$@" ;;
+    status)  cmd_status "$@" ;;
+    --version|-v) printf "mbp v%s\n" "$MBP_VERSION" ;;
+    --help|-h|help|"") usage ;;
+    *) printf "Unknown command: %s\n\n" "$command" >&2; usage; exit 1 ;;
+  esac
+}
+
+main "$@"

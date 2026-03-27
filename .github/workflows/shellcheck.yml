@@ -1,0 +1,32 @@
+name: shellcheck
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ShellCheck
+        run: sudo apt-get install -y shellcheck
+
+      - name: Lint bin/mbp
+        run: shellcheck -S warning bin/mbp
+
+      - name: Lint lib/
+        run: shellcheck -S warning lib/*.sh
+
+      - name: Lint modules/
+        run: shellcheck -S warning modules/*.sh
+
+      - name: Lint tour/steps.sh
+        run: shellcheck -S warning tour/steps.sh
+
+      - name: Lint install.sh
+        run: shellcheck -S warning install.sh

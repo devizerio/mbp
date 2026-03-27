@@ -1,0 +1,10 @@
+# Brewfile.apps — GUI applications
+
+cask "ngrok"               # Tunnel for local dev
+cask "wireshark"           # Network analysis
+cask "graphql-playground"  # GraphQL IDE
+cask "hyper"               # Hyper terminal
+cask "icanhazshortcut"     # Global keyboard shortcuts
+cask "xcodes"              # Xcode version manager
+cask "secretive"           # SSH keys in Secure Enclave
+cask "gpg-suite"           # GPG GUI tools

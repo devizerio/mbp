@@ -1,0 +1,21 @@
+[user]
+	email = jensen@devizer.io
+	name = Jensen Bernard
+[init]
+	defaultBranch = main
+[core]
+	ignorecase = false
+	editor = vim
+[push]
+	autoSetupRemote = true
+[pull]
+	rebase = false
+[credential "https://github.com"]
+	helper =
+	helper = !/opt/homebrew/bin/gh auth git-credential
+[credential "https://gist.github.com"]
+	helper =
+	helper = !/opt/homebrew/bin/gh auth git-credential
+# GPG signing is configured by module 06 (git) if a key is present.
+# Client-specific git identities are added by: mbp client add <name>
+# which appends [includeIf] blocks below this line.
