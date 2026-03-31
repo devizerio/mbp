@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # tour/steps.sh — Interactive post-setup walkthrough
 # Steps are filtered to only show modules that were actually installed.
+# Uses @clack/prompts when Node.js is available, falls back to bash.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MBP_REPO="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -9,6 +10,13 @@ source "$MBP_REPO/lib/core.sh"
 source "$MBP_REPO/lib/state.sh"
 
 CONTENT_DIR="$SCRIPT_DIR/content"
+PROMPTS_BIN="$MBP_REPO/bin/mbp-prompts.mjs"
+
+# Check if @clack/prompts are available
+has_node_prompts() {
+  command -v node >/dev/null 2>&1 && [ -f "$PROMPTS_BIN" ] && \
+    [ -d "$MBP_REPO/node_modules/@clack/prompts" ]
+}
 
 # Map: "display_name:module_name:content_file"
 ALL_STEPS=(
@@ -35,52 +43,68 @@ done
 
 TOTAL="${#ACTIVE_STEPS[@]}"
 
-# === Welcome ===
-clear
-mbp_print_logo
-printf "Welcome to your ${MBP_COLOR_BRAND}${MBP_COLOR_BOLD}Devizer MBP${MBP_COLOR_RESET}!\n"
-printf "Let's walk through what was set up (%s tools).\n\n" "$TOTAL"
-printf "Press ${MBP_COLOR_DIM}Enter${MBP_COLOR_RESET} to continue through each section.\n"
-printf "\nPress Enter to start..."
-read -r
+if has_node_prompts; then
+  # === @clack/prompts tour ===
+  node "$PROMPTS_BIN" tour-welcome "$TOTAL"
 
-N=0
-for step_def in "${ACTIVE_STEPS[@]}"; do
-  N=$((N + 1))
-  display_name="${step_def%%:*}"
-  rest="${step_def#*:}"
-  module_name="${rest%%:*}"
-  content_file="${rest##*:}"
-  content_path="$CONTENT_DIR/$content_file"
+  N=0
+  for step_def in "${ACTIVE_STEPS[@]}"; do
+    N=$((N + 1))
+    display_name="${step_def%%:*}"
+    rest="${step_def#*:}"
+    content_file="${rest##*:}"
+    content_path="$CONTENT_DIR/$content_file"
+
+    node "$PROMPTS_BIN" tour-step "$display_name" "$N" "$TOTAL" "$content_path"
+  done
+
+  node "$PROMPTS_BIN" tour-complete
+else
+  # === Bash fallback tour ===
+  clear
+  mbp_print_logo
+  printf "Welcome to your ${MBP_COLOR_BRAND}${MBP_COLOR_BOLD}Devizer MBP${MBP_COLOR_RESET}!\n"
+  printf "Let's walk through what was set up (%s tools).\n\n" "$TOTAL"
+  printf "Press ${MBP_COLOR_DIM}Enter${MBP_COLOR_RESET} to continue through each section.\n"
+  printf "\nPress Enter to start..."
+  read -r
+
+  N=0
+  for step_def in "${ACTIVE_STEPS[@]}"; do
+    N=$((N + 1))
+    display_name="${step_def%%:*}"
+    rest="${step_def#*:}"
+    module_name="${rest%%:*}"
+    content_file="${rest##*:}"
+    content_path="$CONTENT_DIR/$content_file"
+
+    clear
+    printf "${MBP_COLOR_BRAND}${MBP_COLOR_BOLD}[%s/%s] %s${MBP_COLOR_RESET}\n" "$N" "$TOTAL" "$display_name"
+    printf "─────────────────────────────────────\n\n"
+
+    if [ -f "$content_path" ]; then
+      tail -n +2 "$content_path"
+    else
+      printf "  ${MBP_COLOR_DIM}(content file not found: %s)${MBP_COLOR_RESET}\n" "$content_file"
+    fi
+
+    printf "\n"
+    if [ "$N" -lt "$TOTAL" ]; then
+      printf "${MBP_COLOR_DIM}[%s/%s] Press Enter to continue...${MBP_COLOR_RESET}" "$N" "$TOTAL"
+    else
+      printf "${MBP_COLOR_DIM}Press Enter to finish the tour...${MBP_COLOR_RESET}"
+    fi
+    read -r
+  done
 
   clear
-  printf "${MBP_COLOR_BRAND}${MBP_COLOR_BOLD}[%s/%s] %s${MBP_COLOR_RESET}\n" "$N" "$TOTAL" "$display_name"
-  printf "─────────────────────────────────────\n\n"
-
-  if [ -f "$content_path" ]; then
-    # Skip the H1 header line (already shown above), display rest
-    tail -n +2 "$content_path"
-  else
-    printf "  ${MBP_COLOR_DIM}(content file not found: %s)${MBP_COLOR_RESET}\n" "$content_file"
-  fi
-
+  mbp_print_logo
+  printf "${MBP_COLOR_SUCCESS}${MBP_COLOR_BOLD}Tour complete!${MBP_COLOR_RESET}\n\n"
+  printf "Quick reference:\n\n"
+  printf "  ${MBP_COLOR_BRAND}mbp status${MBP_COLOR_RESET}           — see your current setup\n"
+  printf "  ${MBP_COLOR_BRAND}mbp audit${MBP_COLOR_RESET}            — check for config drift\n"
+  printf "  ${MBP_COLOR_BRAND}mbp update${MBP_COLOR_RESET}           — keep mbp current\n"
+  printf "  ${MBP_COLOR_BRAND}claude${MBP_COLOR_RESET}               — start Claude Code in any project\n"
+  printf "\n  Secrets and personal aliases: ${MBP_COLOR_DIM}~/.zshrc.local${MBP_COLOR_RESET}\n"
   printf "\n"
-  if [ "$N" -lt "$TOTAL" ]; then
-    printf "${MBP_COLOR_DIM}[%s/%s] Press Enter to continue...${MBP_COLOR_RESET}" "$N" "$TOTAL"
-  else
-    printf "${MBP_COLOR_DIM}Press Enter to finish the tour...${MBP_COLOR_RESET}"
-  fi
-  read -r
-done
-
-# === Closing ===
-clear
-mbp_print_logo
-printf "${MBP_COLOR_SUCCESS}${MBP_COLOR_BOLD}Tour complete!${MBP_COLOR_RESET}\n\n"
-printf "Quick reference:\n\n"
-printf "  ${MBP_COLOR_BRAND}mbp status${MBP_COLOR_RESET}           — see your current setup\n"
-printf "  ${MBP_COLOR_BRAND}mbp audit${MBP_COLOR_RESET}            — check for config drift\n"
-printf "  ${MBP_COLOR_BRAND}mbp update${MBP_COLOR_RESET}           — keep mbp current\n"
-printf "  ${MBP_COLOR_BRAND}claude${MBP_COLOR_RESET}               — start Claude Code in any project\n"
-printf "\n  Secrets and personal aliases: ${MBP_COLOR_DIM}~/.zshrc.local${MBP_COLOR_RESET}\n"
-printf "\n"
+fi

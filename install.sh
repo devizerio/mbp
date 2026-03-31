@@ -106,6 +106,14 @@ fi
 
 export PATH="$MBP_BIN:$PATH"
 
+# ── Install Node.js dependencies (for @clack/prompts UI) ─────────────────────
+if command -v npm &>/dev/null && [ -f "$MBP_REPO/package.json" ]; then
+  log_step "Installing Node.js dependencies for interactive prompts..."
+  (cd "$MBP_REPO" && npm install --production 2>/dev/null) && \
+    log_ok "Node.js dependencies installed" || \
+    log_warn "Could not install Node.js deps — will use bash fallback prompts"
+fi
+
 # ── Run setup ─────────────────────────────────────────────────────────────────
 printf "\n"
 log_step "Running mbp setup..."
