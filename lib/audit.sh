@@ -5,6 +5,8 @@
 source "$(dirname "$0")/../lib/core.sh"
 source "$(dirname "$0")/../lib/state.sh"
 
+# Defaults (used when MBP_PROFILE_BREWFILES/MISE_TOOLS not set by caller)
+
 AUDIT_ISSUES=0
 AUDIT_CATEGORIES=0
 

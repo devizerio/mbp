@@ -24,3 +24,6 @@ brew "zstd"
 # Networking
 brew "openssh"
 brew "openssl@3"
+
+# Utilities
+brew "blueutil"            # Bluetooth CLI

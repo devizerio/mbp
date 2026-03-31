@@ -116,6 +116,19 @@ state_migrate_from_txt() {
        "$MBP_STATE_JSON" > "$tmp" && mv "$tmp" "$MBP_STATE_JSON"
   done < "$MBP_STATE_TXT"
 
+  # Migrate selected_modules.txt into state.json
+  local sel_file="${MBP_STATE_DIR}/selected_modules.txt"
+  if [ -f "$sel_file" ]; then
+    local modules_json="[]"
+    while IFS= read -r mod; do
+      [ -z "$mod" ] && continue
+      modules_json=$(echo "$modules_json" | jq --arg m "$mod" '. + [$m]')
+    done < "$sel_file"
+    local tmp; tmp=$(_mbp_mktemp)
+    jq --argjson sel "$modules_json" '.selected_modules = $sel' \
+      "$MBP_STATE_JSON" > "$tmp" && mv "$tmp" "$MBP_STATE_JSON"
+  fi
+
   # Rename plain-text file so migration only runs once
   mv "$MBP_STATE_TXT" "${MBP_STATE_TXT}.migrated"
 }
@@ -188,6 +201,28 @@ state_set_last_run() {
   local ts; ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
   local tmp; tmp=$(_mbp_mktemp)
   jq --arg ts "$ts" '.last_run = $ts' "$MBP_STATE_JSON" > "$tmp" && mv "$tmp" "$MBP_STATE_JSON"
+}
+
+# === Selected modules ===
+MBP_SELECTED_MODULES_FILE="${MBP_STATE_DIR}/selected_modules.txt"
+
+# Get selected modules (space-separated). Checks state.json first, then txt fallback.
+state_get_selected_modules() {
+  # Try JSON first
+  if command -v jq >/dev/null 2>&1 && [ -f "$MBP_STATE_JSON" ]; then
+    local mods
+    mods=$(jq -r '.selected_modules // [] | .[]' "$MBP_STATE_JSON" 2>/dev/null)
+    if [ -n "$mods" ]; then
+      echo "$mods" | tr '\n' ' ' | sed 's/ $//'
+      return 0
+    fi
+  fi
+  # Fall back to plain-text
+  if [ -f "$MBP_SELECTED_MODULES_FILE" ]; then
+    tr '\n' ' ' < "$MBP_SELECTED_MODULES_FILE" | sed 's/ $//'
+    return 0
+  fi
+  return 1
 }
 
 # === Idempotency decision ===

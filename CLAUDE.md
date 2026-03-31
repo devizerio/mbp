@@ -9,10 +9,9 @@ read by humans (and Claude Code).
 ```
 bin/mbp              — CLI entry point (subcommands: setup, audit, tour, update, status)
 lib/
-  core.sh            — logging, color, idempotency helpers, mbp_run_module
+  core.sh            — logging, color, idempotency helpers, mbp_run_module, module path resolution
   platform.sh        — macOS version detection, Homebrew prefix
   state.sh           — state R/W (plain-text for modules 01-02, JSON from module 03 onward)
-  profile.sh         — INI-style .conf parser, module path resolution
   audit.sh           — drift detection (brew, mise, dotfiles, macOS defaults)
 modules/
   01-xcode.sh        — Xcode CLT (critical — halts on failure)
@@ -25,25 +24,20 @@ modules/
   08-secrets.sh      — 1Password CLI
   09-docker.sh       — Docker Desktop
   10-ai-tools.sh     — Claude Code + gstack
-  11-macos-defaults.sh — Dock, Finder, keyboard, screenshot defaults
-  12-apps.sh         — verify cask installs from active profile
-  13-dev-dirs.sh     — ~/Developer structure, ~/.mbp dirs
+  11-macos-defaults.sh — Dock, Finder, keyboard, screenshot, widget defaults
+  12-apps.sh         — verify cask installs
+  13-dev-dirs.sh     — ~/.mbp infrastructure dirs
 dotfiles/
   zshrc              — Oh My Zsh config, mise activation, client() helper
   gitconfig          — git identity, gh credential, GPG signing stub
   ssh-config         — 1Password agent, github.com host, config.d Include
   tool-versions      — global mise runtimes
   vimrc              — minimal vim config
-profiles/
-  devizer-full.conf  — all modules, full Brewfiles
-  client-minimal.conf — subset for client machines
-  personal.conf      — full + personal tools
 brewfiles/
   Brewfile.core      — essentials every machine needs
   Brewfile.dev       — developer tools (mise, bun, docker, cloud CLIs)
-  Brewfile.ai        — AI tooling
-  Brewfile.apps      — desktop applications
-  Brewfile.personal  — personal preferences
+  Brewfile.ai        — AI tooling (bundled only if ai-tools module selected)
+  Brewfile.apps      — desktop applications (bundled only if apps module selected)
 tour/
   steps.sh           — interactive walkthrough (mbp tour)
   content/           — markdown files shown in the tour (one per module)
@@ -58,6 +52,18 @@ Module 03 triggers migration to JSON (`~/.mbp/state.json`) via `state_migrate_fr
 State is keyed by module name (e.g. `homebrew`, `mise`). A completed module has status
 `ok` and is skipped on re-runs unless `MBP_FORCE=1`.
 
+### Module selection
+
+On first run, an interactive picker lets the user choose which modules to install.
+The selection is saved to `~/.mbp/selected_modules.txt` (plain text, one module per
+line) since jq is not yet available. Module 03's state migration copies this into
+`state.json` under a `selected_modules` array. On re-runs, the saved selection is used.
+`--force` re-triggers the picker.
+
+Module 02 (homebrew) reads `selected_modules.txt` to determine which Brewfiles to
+bundle: `core` and `dev` always run; `ai` only if `ai-tools` is selected; `apps` only
+if `apps` is selected.
+
 ## Module conventions
 
 Each module:
@@ -70,21 +76,13 @@ Each module:
 
 Modules 01 and 02 use `state_txt_set` instead of the JSON functions.
 
-## Profile format
-
-```ini
-format = 1
-modules = homebrew,mise,shell,dotfiles,git,ssh,secrets,docker,ai-tools,macos-defaults,apps,dev-dirs
-brewfiles = Brewfile.core Brewfile.dev Brewfile.ai Brewfile.apps
-mise_tools = nodejs:22.0.0 ruby:3.3.0 python:3.12.0
-```
-
 ## Adding a module
 
 1. Create `modules/NN-name.sh`
-2. Add `name` to the relevant profile's `modules =` line
-3. Add a tour content file at `tour/content/NN-name.md` if needed
-4. Add a step to `tour/steps.sh` ALL_STEPS array
+2. Add the module name to `MBP_DEFAULT_MODULES` in `bin/mbp`
+3. Add a description to `MBP_MODULE_DESC` in `bin/mbp`
+4. Add a tour content file at `tour/content/NN-name.md` if needed
+5. Add a step to `tour/steps.sh` ALL_STEPS array
 
 ## Testing
 
@@ -98,12 +96,11 @@ Re-run individual modules during development:
 
 ## Key environment variables
 
-  MBP_REPO         — path to this repository (set by bin/mbp)
-  MBP_FORCE=1      — re-run completed modules
-  NO_COLOR=1       — disable ANSI color output
-  MBP_PROFILE_MODULES   — space-separated module names (set by profile_load)
-  MBP_PROFILE_BREWFILES — space-separated Brewfile names
-  MBP_PROFILE_MISE_TOOLS — space-separated tool:version pairs
+  MBP_REPO               — path to this repository (set by bin/mbp)
+  MBP_FORCE=1            — re-run completed modules
+  NO_COLOR=1             — disable ANSI color output
+  MBP_PROFILE_BREWFILES  — space-separated Brewfile names (set from defaults in bin/mbp)
+  MBP_PROFILE_MISE_TOOLS — space-separated tool@version pairs (set from defaults in bin/mbp)
 
 ## Brand
 
