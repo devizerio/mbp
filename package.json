@@ -1,12 +1,15 @@
 {
   "name": "mbp",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "MacBook Pro setup by Devizer",
+  "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC"
+  "author": "Devizer",
+  "license": "ISC",
+  "dependencies": {
+    "@clack/prompts": "^1.1.0"
+  }
 }

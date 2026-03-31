@@ -58,9 +58,48 @@ usage() {
   printf "\n"
 }
 
+# === Check if Node.js prompts are available ===
+mbp_has_node_prompts() {
+  command -v node >/dev/null 2>&1 && [ -f "$MBP_REPO/bin/mbp-prompts.mjs" ] && \
+    [ -d "$MBP_REPO/node_modules/@clack/prompts" ]
+}
+
 # === Interactive module picker ===
-# Shows on first run (no state exists). User toggles modules on/off.
+# Uses @clack/prompts when Node.js is available, falls back to bash.
 module_picker() {
+  if mbp_has_node_prompts; then
+    module_picker_clack
+  else
+    module_picker_bash
+  fi
+}
+
+# @clack/prompts-based module picker (rich terminal UI)
+module_picker_clack() {
+  local tmpfile; tmpfile=$(mktemp)
+
+  if ! node "$MBP_REPO/bin/mbp-prompts.mjs" --output "$tmpfile" module-picker; then
+    mbp_log_warn "Node prompts failed, falling back to bash picker"
+    rm -f "$tmpfile"
+    module_picker_bash
+    return
+  fi
+
+  # Read result from temp file into selected_modules.txt
+  mkdir -p "${HOME}/.mbp"
+  if [ -s "$tmpfile" ]; then
+    cp "$tmpfile" "$MBP_SELECTED_MODULES_FILE"
+  else
+    mbp_log_warn "No modules selected, falling back to bash picker"
+    rm -f "$tmpfile"
+    module_picker_bash
+    return
+  fi
+  rm -f "$tmpfile"
+}
+
+# Bash fallback module picker (for fresh Macs without Node)
+module_picker_bash() {
   local -a all_modules
   read -ra all_modules <<< "$MBP_DEFAULT_MODULES"
 
@@ -277,9 +316,23 @@ cmd_update() {
   fi
 
   printf "\n"
-  printf "Phase 2: Re-run setup? [y/N] "
-  read -r response
-  if [[ "$response" =~ ^[Yy]$ ]]; then
+  local should_rerun="no"
+  if mbp_has_node_prompts; then
+    local tmpfile; tmpfile=$(mktemp)
+    node "$MBP_REPO/bin/mbp-prompts.mjs" --output "$tmpfile" confirm-update || true
+    if [ -s "$tmpfile" ] && grep -q "yes" "$tmpfile"; then
+      should_rerun="yes"
+    fi
+    rm -f "$tmpfile"
+  else
+    printf "Phase 2: Re-run setup? [y/N] "
+    read -r response
+    if [[ "$response" =~ ^[Yy]$ ]]; then
+      should_rerun="yes"
+    fi
+  fi
+
+  if [ "$should_rerun" = "yes" ]; then
     cmd_setup
   else
     printf "Skipped. Run ${MBP_COLOR_BRAND}mbp setup${MBP_COLOR_RESET} when ready.\n"

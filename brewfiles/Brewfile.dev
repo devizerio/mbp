@@ -35,3 +35,4 @@ brew "scrcpy"              # Android screen mirroring
 
 # Dev casks
 cask "docker"              # Docker Desktop
+cask "visual-studio-code"  # VS Code editor

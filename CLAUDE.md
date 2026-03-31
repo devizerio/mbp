@@ -8,6 +8,7 @@ read by humans (and Claude Code).
 
 ```
 bin/mbp              — CLI entry point (subcommands: setup, audit, tour, update, status)
+bin/mbp-prompts.mjs  — Node.js interactive prompts (@clack/prompts)
 lib/
   core.sh            — logging, color, idempotency helpers, mbp_run_module, module path resolution
   platform.sh        — macOS version detection, Homebrew prefix
@@ -25,7 +26,7 @@ modules/
   09-docker.sh       — Docker Desktop
   10-ai-tools.sh     — Claude Code + gstack
   11-macos-defaults.sh — Dock, Finder, keyboard, screenshot, widget defaults
-  12-apps.sh         — verify cask installs
+  12-apps.sh         — verify cask installs + VS Code CLI setup
   13-dev-dirs.sh     — ~/.mbp infrastructure dirs
 dotfiles/
   zshrc              — Oh My Zsh config, mise activation, client() helper
@@ -35,7 +36,7 @@ dotfiles/
   vimrc              — minimal vim config
 brewfiles/
   Brewfile.core      — essentials every machine needs
-  Brewfile.dev       — developer tools (mise, bun, docker, cloud CLIs)
+  Brewfile.dev       — developer tools (mise, bun, docker, VS Code, cloud CLIs)
   Brewfile.ai        — AI tooling (bundled only if ai-tools module selected)
   Brewfile.apps      — desktop applications (bundled only if apps module selected)
 tour/
@@ -63,6 +64,17 @@ line) since jq is not yet available. Module 03's state migration copies this int
 Module 02 (homebrew) reads `selected_modules.txt` to determine which Brewfiles to
 bundle: `core` and `dev` always run; `ai` only if `ai-tools` is selected; `apps` only
 if `apps` is selected.
+
+## Interactive prompts (@clack/prompts)
+
+All interactive user input (module picker, confirmations, tour) uses `@clack/prompts`
+via `bin/mbp-prompts.mjs` when Node.js is available. Falls back to bash `read` prompts
+on fresh Macs where Node isn't installed yet.
+
+The Node script communicates with bash via stdout markers (e.g. `__MBP_MODULES_START__`,
+`__MBP_CONFIRM__=yes`). The bash caller parses these markers and displays the rest.
+
+Detection: `mbp_has_node_prompts()` checks for `node` binary + `node_modules/@clack/prompts`.
 
 ## Module conventions
 
