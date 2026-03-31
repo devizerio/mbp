@@ -10,7 +10,7 @@ EXPECTED_CASKS=""
 for bf in ${MBP_PROFILE_BREWFILES:-}; do
   case "$bf" in
     apps)
-      EXPECTED_CASKS="$EXPECTED_CASKS ngrok wireshark hyper xcodes secretive gpg-suite icanhazshortcut"
+      EXPECTED_CASKS="$EXPECTED_CASKS ngrok graphql-playground xcodes secretive gpg-suite icanhazshortcut"
       ;;
     dev)
       EXPECTED_CASKS="$EXPECTED_CASKS docker"

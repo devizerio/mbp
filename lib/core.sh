@@ -118,6 +118,31 @@ mbp_run_module() {
   return "$exit_code"
 }
 
+# === Module path resolution ===
+# Resolve a bare module name (e.g., "mise") to its script path (e.g., "modules/04-mise.sh")
+# Usage: mbp_resolve_module_path <name> <repo_dir>
+mbp_resolve_module_path() {
+  local name="$1"
+  local repo_dir="${2:-$(pwd)}"
+  local modules_dir="$repo_dir/modules"
+
+  # Glob for NN-name.sh
+  local found=""
+  for f in "$modules_dir"/[0-9][0-9]-"${name}".sh; do
+    if [ -f "$f" ]; then
+      found="$f"
+      break
+    fi
+  done
+
+  if [ -z "$found" ]; then
+    printf "module '%s' not found in %s\n" "$name" "$modules_dir" >&2
+    return 1
+  fi
+
+  echo "$found"
+}
+
 # === ASCII logo ===
 mbp_print_logo() {
   printf "${MBP_COLOR_BRAND}"

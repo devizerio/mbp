@@ -14,7 +14,7 @@ set -euo pipefail
 MBP_REPO="${MBP_REPO:-$HOME/.mbp/repo}"
 MBP_REMOTE="${MBP_REMOTE:-https://github.com/devizerio/mbp.git}"
 MBP_BRANCH="${MBP_BRANCH:-main}"
-MBP_PROFILE="${MBP_PROFILE:-devizer-full}"
+
 
 # ── Colors ────────────────────────────────────────────────────────────────────
 if [ -t 1 ] && [ "${NO_COLOR:-}" = "" ]; then
@@ -64,8 +64,7 @@ fi
 printf "  This script will:\n"
 printf "    1. Clone mbp to ${DIM}$MBP_REPO${RESET}\n"
 printf "    2. Add ${DIM}mbp${RESET} to your PATH\n"
-printf "    3. Run ${DIM}mbp setup --profile $MBP_PROFILE${RESET}\n\n"
-printf "  Profile:  ${BRAND}$MBP_PROFILE${RESET}\n"
+printf "    3. Run ${DIM}mbp setup${RESET} (you'll choose which modules to install)\n\n"
 printf "  Repo:     ${DIM}$MBP_REPO${RESET}\n\n"
 printf "  ${DIM}Press Enter to continue, or Ctrl+C to cancel...${RESET}"
 read -r
@@ -112,4 +111,4 @@ printf "\n"
 log_step "Running mbp setup..."
 printf "\n"
 
-exec "$MBP_BIN/mbp" setup --profile "$MBP_PROFILE"
+exec "$MBP_BIN/mbp" setup

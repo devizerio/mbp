@@ -66,6 +66,10 @@ apply_default "NSGlobalDomain" "NSNavPanelExpandedStateForSaveMode" "bool" "true
 apply_default "NSGlobalDomain" "PMPrintingExpandedStateForPrint"    "bool" "true"
 apply_default "NSGlobalDomain" "NSDocumentSaveNewDocumentsToCloud"  "bool" "false"
 
+mbp_log_step "Widgets..."
+apply_default "com.apple.WindowManager" "StandardHideDesktopIcons" "bool" "true"
+apply_default "com.apple.WindowManager" "EnableStandardClickToShowDesktop" "bool" "false"
+
 mbp_log_step "TextEdit..."
 apply_default "com.apple.TextEdit" "RichText"        "int"    "0"
 apply_default "com.apple.TextEdit" "PlainTextEncoding" "int"  "4"

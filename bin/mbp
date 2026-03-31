@@ -11,43 +11,136 @@ MBP_REPO="$(cd "$SCRIPT_DIR/.." && pwd)"
 source "$MBP_REPO/lib/core.sh"
 source "$MBP_REPO/lib/platform.sh"
 source "$MBP_REPO/lib/state.sh"
-source "$MBP_REPO/lib/profile.sh"
 
 MBP_VERSION="$(<"$MBP_REPO/VERSION")"
+
+# === Defaults (replaces profile system) ===
+MBP_DEFAULT_MODULES="xcode homebrew shell mise dotfiles git ssh secrets docker ai-tools macos-defaults apps dev-dirs"
+MBP_DEFAULT_BREWFILES="core dev ai apps"
+MBP_DEFAULT_MISE_TOOLS="node@22 ruby@3.3 python@3.12 bun@1.2"
+
+# === Module descriptions for picker ===
+declare -A MBP_MODULE_DESC=(
+  [xcode]="Xcode Command Line Tools (required)"
+  [homebrew]="Homebrew package manager (required)"
+  [shell]="Oh My Zsh + default shell"
+  [mise]="Runtime version manager (node, ruby, python)"
+  [dotfiles]="Symlink dotfiles (.zshrc, .gitconfig, etc.)"
+  [git]="Git config + SSH signing"
+  [ssh]="SSH key permissions + config"
+  [secrets]="1Password CLI"
+  [docker]="Docker Desktop"
+  [ai-tools]="Claude Code + gstack"
+  [macos-defaults]="Dock, Finder, keyboard, widget defaults"
+  [apps]="GUI applications (casks)"
+  [dev-dirs]="Create ~/.mbp infrastructure dirs"
+)
 
 # === Usage ===
 usage() {
   printf "${MBP_COLOR_BRAND}${MBP_COLOR_BOLD}mbp${MBP_COLOR_RESET} v%s — The Living Machine by Devizer\n\n" "$MBP_VERSION"
   printf "Usage: mbp <command> [options]\n\n"
   printf "Commands:\n"
-  printf "  ${MBP_COLOR_BOLD}setup${MBP_COLOR_RESET} [--profile NAME] [--module NAME] [--force]\n"
-  printf "                         Provision this machine (default profile: devizer-full)\n"
+  printf "  ${MBP_COLOR_BOLD}setup${MBP_COLOR_RESET} [--module NAME] [--force]\n"
+  printf "                         Provision this machine\n"
   printf "  ${MBP_COLOR_BOLD}audit${MBP_COLOR_RESET}                  Check for drift from canonical config\n"
   printf "  ${MBP_COLOR_BOLD}tour${MBP_COLOR_RESET}                   Interactive walkthrough of installed tools\n"
   printf "  ${MBP_COLOR_BOLD}update${MBP_COLOR_RESET}                 Self-update mbp repo and optionally re-setup\n"
-  printf "  ${MBP_COLOR_BOLD}status${MBP_COLOR_RESET}                 Show profile, module states, and last run\n"
+  printf "  ${MBP_COLOR_BOLD}status${MBP_COLOR_RESET}                 Show module states and last run\n"
   printf "\nOptions:\n"
-  printf "  --profile NAME   Profile to use (default: devizer-full)\n"
   printf "  --module NAME    Run only this module (e.g., --module mise)\n"
   printf "  --force          Re-run modules even if already marked ok\n"
   printf "  --version        Print version and exit\n"
   printf "\nExamples:\n"
   printf "  mbp setup\n"
-  printf "  mbp setup --profile client-minimal\n"
   printf "  mbp setup --module mise --force\n"
   printf "  mbp audit\n"
   printf "\n"
 }
 
+# === Interactive module picker ===
+# Shows on first run (no state exists). User toggles modules on/off.
+module_picker() {
+  local -a all_modules
+  read -ra all_modules <<< "$MBP_DEFAULT_MODULES"
+
+  # All selected by default
+  local -A selected=()
+  for mod in "${all_modules[@]}"; do
+    selected[$mod]=1
+  done
+
+  printf "\n${MBP_COLOR_BRAND}${MBP_COLOR_BOLD}Module Selection${MBP_COLOR_RESET}\n"
+  printf "${MBP_COLOR_DIM}Toggle modules by typing their number. Press Enter to confirm.${MBP_COLOR_RESET}\n\n"
+
+  while true; do
+    local n=0
+    for mod in "${all_modules[@]}"; do
+      n=$((n + 1))
+      local mark="x"
+      [ "${selected[$mod]}" != "1" ] && mark=" "
+      local locked=""
+      if [ "$mod" = "xcode" ] || [ "$mod" = "homebrew" ]; then
+        locked=" ${MBP_COLOR_DIM}(required)${MBP_COLOR_RESET}"
+      fi
+      printf "  %2d. [%s] %-16s %s%s\n" "$n" "$mark" "$mod" "${MBP_MODULE_DESC[$mod]:-}" "$locked"
+    done
+
+    printf "\n${MBP_COLOR_BRAND}→${MBP_COLOR_RESET} Type number(s) to toggle (e.g. 10 to toggle ai-tools), Enter to confirm: "
+    read -r input
+
+    # Empty input = confirm
+    if [ -z "$input" ]; then
+      break
+    fi
+
+    # Process each number
+    for num in $input; do
+      # Validate numeric
+      case "$num" in
+        ''|*[!0-9]*) continue ;;
+      esac
+
+      if [ "$num" -ge 1 ] && [ "$num" -le "${#all_modules[@]}" ]; then
+        local idx=$((num - 1))
+        local mod="${all_modules[$idx]}"
+
+        # Don't allow deselecting mandatory modules
+        if [ "$mod" = "xcode" ] || [ "$mod" = "homebrew" ]; then
+          printf "  ${MBP_COLOR_WARN}⚠${MBP_COLOR_RESET}  %s is required and cannot be deselected\n" "$mod"
+          continue
+        fi
+
+        # Toggle
+        if [ "${selected[$mod]}" = "1" ]; then
+          selected[$mod]=0
+        else
+          selected[$mod]=1
+        fi
+      fi
+    done
+    printf "\n"
+  done
+
+  # Save selection to plain text (jq not yet available)
+  mkdir -p "${HOME}/.mbp"
+  : > "$MBP_SELECTED_MODULES_FILE"
+  for mod in "${all_modules[@]}"; do
+    if [ "${selected[$mod]}" = "1" ]; then
+      echo "$mod" >> "$MBP_SELECTED_MODULES_FILE"
+    fi
+  done
+
+  printf "\n${MBP_COLOR_SUCCESS}✓${MBP_COLOR_RESET}  Module selection saved\n\n"
+}
+
 # === cmd_setup ===
 cmd_setup() {
-  local profile="devizer-full"
   local single_module=""
   export MBP_FORCE=0
 
   while [ $# -gt 0 ]; do
     case "$1" in
-      --profile) profile="$2"; shift 2 ;;
       --module)  single_module="$2"; shift 2 ;;
       --force)   export MBP_FORCE=1; shift ;;
       *) printf "Unknown option: %s\n" "$1" >&2; usage; exit 1 ;;
@@ -55,43 +148,68 @@ cmd_setup() {
   done
 
   mbp_print_logo
-  printf "Profile: ${MBP_COLOR_BRAND}%s${MBP_COLOR_RESET}\n" "$profile"
 
-  # Load profile
-  local profile_path="$MBP_REPO/profiles/${profile}.conf"
-  profile_load "$profile_path" || exit 1
-  state_init_json "$profile" "$MBP_VERSION"
-  state_set_profile "$profile"
+  # Pre-acquire sudo credentials for the session
+  printf "${MBP_COLOR_DIM}Some modules need admin access. You may be prompted for your password.${MBP_COLOR_RESET}\n"
+  sudo -v
+  # Keep sudo alive in background
+  while true; do sudo -n true; sleep 50; kill -0 "$$" || exit; done 2>/dev/null &
+
+  # Set default env vars for modules
+  export MBP_PROFILE_BREWFILES="$MBP_DEFAULT_BREWFILES"
+  export MBP_PROFILE_MISE_TOOLS="$MBP_DEFAULT_MISE_TOOLS"
+
+  # Determine module list
+  local module_list=""
+
+  if [ -n "$single_module" ]; then
+    # Single-module mode — skip picker
+    export MBP_FORCE=1
+    local module_path
+    module_path=$(mbp_resolve_module_path "$single_module" "$MBP_REPO") || exit 1
+    state_init_json "mbp" "$MBP_VERSION"
+    state_set_last_run
+    mbp_run_module "$module_path" 1 1
+    mbp_print_summary "$(date +%s)"
+    return
+  fi
+
+  # First run: show interactive picker
+  if [ ! -f "$MBP_STATE_JSON" ] && [ ! -f "$MBP_SELECTED_MODULES_FILE" ]; then
+    if [ "${MBP_FORCE:-0}" = "1" ] || true; then
+      module_picker
+    fi
+  elif [ "${MBP_FORCE:-0}" = "1" ] && [ -z "$single_module" ]; then
+    # --force without --module: re-show picker
+    module_picker
+  fi
+
+  # Load selected modules
+  if ! module_list=$(state_get_selected_modules); then
+    module_list="$MBP_DEFAULT_MODULES"
+  fi
+
+  state_init_json "mbp" "$MBP_VERSION"
   state_set_last_run
 
   local setup_start; setup_start=$(date +%s)
 
-  if [ -n "$single_module" ]; then
-    # Single-module mode
-    export MBP_FORCE=1  # Always force for explicit --module
-    local module_path
-    module_path=$(profile_resolve_module_path "$single_module" "$MBP_REPO") || exit 1
-    mbp_run_module "$module_path" 1 1
-  else
-    # Full setup: run all profile modules in order
-    # Build ordered list by expanding profile module names to paths
-    local module_paths=()
-    for module_name in $MBP_PROFILE_MODULES; do
-      local path
-      path=$(profile_resolve_module_path "$module_name" "$MBP_REPO") || continue
-      module_paths+=("$path")
-    done
+  # Build ordered list by expanding module names to paths
+  local module_paths=()
+  for module_name in $module_list; do
+    local path
+    path=$(mbp_resolve_module_path "$module_name" "$MBP_REPO") || continue
+    module_paths+=("$path")
+  done
 
-    local total="${#module_paths[@]}"
-    local n=0
-    for module_path in "${module_paths[@]}"; do
-      n=$((n + 1))
-      # Pass profile env vars to module subprocess via exports
-      export MBP_PROFILE_MODULES MBP_PROFILE_BREWFILES MBP_PROFILE_MISE_TOOLS
-      export MBP_REPO MBP_FORCE
-      mbp_run_module "$module_path" "$n" "$total"
-    done
-  fi
+  local total="${#module_paths[@]}"
+  local n=0
+  for module_path in "${module_paths[@]}"; do
+    n=$((n + 1))
+    export MBP_PROFILE_BREWFILES MBP_PROFILE_MISE_TOOLS
+    export MBP_REPO MBP_FORCE
+    mbp_run_module "$module_path" "$n" "$total"
+  done
 
   mbp_print_summary "$setup_start"
 
@@ -104,11 +222,11 @@ cmd_setup() {
 cmd_audit() {
   source "$MBP_REPO/lib/audit.sh"
 
-  # Load active profile for context
-  local profile; profile=$(state_get_profile 2>/dev/null || echo "devizer-full")
-  profile_load "$MBP_REPO/profiles/${profile}.conf" 2>/dev/null || true
+  # Set defaults for audit (no profiles)
+  export MBP_PROFILE_BREWFILES="$MBP_DEFAULT_BREWFILES"
+  export MBP_PROFILE_MISE_TOOLS="$MBP_DEFAULT_MISE_TOOLS"
 
-  printf "${MBP_COLOR_BRAND}${MBP_COLOR_BOLD}mbp audit${MBP_COLOR_RESET} — checking against profile: %s\n" "$profile"
+  printf "${MBP_COLOR_BRAND}${MBP_COLOR_BOLD}mbp audit${MBP_COLOR_RESET}\n"
 
   audit_homebrew "$MBP_REPO"
   audit_mise
@@ -177,12 +295,10 @@ cmd_status() {
     return 0
   fi
 
-  local profile; profile=$(state_get_profile)
   local last_run; last_run=$(jq -r '.last_run // "never"' "$MBP_STATE_JSON" 2>/dev/null)
   local ok_count; ok_count=$(jq '[.modules[] | select(.status == "ok")] | length' "$MBP_STATE_JSON" 2>/dev/null || echo 0)
   local error_count; error_count=$(jq '[.modules[] | select(.status == "error")] | length' "$MBP_STATE_JSON" 2>/dev/null || echo 0)
   local total_count; total_count=$(jq '.modules | length' "$MBP_STATE_JSON" 2>/dev/null || echo 0)
-  printf "  ${MBP_COLOR_DIM}Profile:${MBP_COLOR_RESET}    %s\n" "${profile:-unknown}"
   printf "  ${MBP_COLOR_DIM}Last run:${MBP_COLOR_RESET}   %s\n" "$last_run"
   printf "  ${MBP_COLOR_DIM}Modules:${MBP_COLOR_RESET}    %s/%s ok" "$ok_count" "$total_count"
   [ "$error_count" -gt 0 ] && printf ", ${MBP_COLOR_ERROR}%s error${MBP_COLOR_RESET}" "$error_count"
