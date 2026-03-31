@@ -166,6 +166,56 @@ async function tourComplete() {
   p.outro(brand(bold('Tour complete!')));
 }
 
+async function sshKeyManager(keysJson) {
+  const keys = JSON.parse(keysJson || '[]');
+
+  p.intro(brand(bold('mbp ssh') + ' — SSH Key Manager'));
+
+  const options = keys.map((k) => ({
+    value: k.name,
+    label: k.name,
+    hint: k.type ? `${k.type} ${k.bits}-bit` : undefined,
+  }));
+  options.push({ value: '__new__', label: 'Create new key' });
+
+  const choice = await p.select({
+    message: 'Select an SSH key',
+    options,
+  });
+
+  if (p.isCancel(choice)) {
+    p.cancel('Cancelled.');
+    process.exit(1);
+  }
+
+  if (choice === '__new__') {
+    const name = await p.text({
+      message: 'Key name (filename in ~/.ssh/)',
+      placeholder: 'id_ed25519',
+      defaultValue: 'id_ed25519',
+      validate: (v) => {
+        if (!v) return 'Name is required';
+        if (/[\/\s]/.test(v)) return 'No spaces or slashes allowed';
+      },
+    });
+    if (p.isCancel(name)) { p.cancel('Cancelled.'); process.exit(1); }
+
+    const email = await p.text({
+      message: 'Email (used as key comment)',
+      placeholder: 'you@example.com',
+      validate: (v) => {
+        if (!v) return 'Email is required';
+      },
+    });
+    if (p.isCancel(email)) { p.cancel('Cancelled.'); process.exit(1); }
+
+    writeResult(JSON.stringify({ action: 'create', name, email }) + '\n');
+    p.outro('Generating key...');
+  } else {
+    writeResult(JSON.stringify({ action: 'show', name: choice }) + '\n');
+  }
+}
+
 // === Main dispatcher ===
 const command = args[0];
 
@@ -187,6 +237,9 @@ switch (command) {
     break;
   case 'tour-complete':
     await tourComplete();
+    break;
+  case 'ssh-keys':
+    await sshKeyManager(args[1]);
     break;
   default:
     console.error(`Unknown prompt command: ${command}`);
