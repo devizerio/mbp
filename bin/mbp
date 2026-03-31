@@ -46,6 +46,7 @@ usage() {
   printf "  ${MBP_COLOR_BOLD}audit${MBP_COLOR_RESET}                  Check for drift from canonical config\n"
   printf "  ${MBP_COLOR_BOLD}tour${MBP_COLOR_RESET}                   Interactive walkthrough of installed tools\n"
   printf "  ${MBP_COLOR_BOLD}update${MBP_COLOR_RESET}                 Self-update mbp repo and optionally re-setup\n"
+  printf "  ${MBP_COLOR_BOLD}ssh${MBP_COLOR_RESET}                    Manage SSH keys (list, show, create)\n"
   printf "  ${MBP_COLOR_BOLD}status${MBP_COLOR_RESET}                 Show module states and last run\n"
   printf "\nOptions:\n"
   printf "  --module NAME    Run only this module (e.g., --module mise)\n"
@@ -294,6 +295,11 @@ cmd_update() {
     exit 1
   fi
 
+  # Install/update Node dependencies (for @clack/prompts)
+  if [ -f "$MBP_REPO/package.json" ] && command -v npm >/dev/null 2>&1; then
+    npm install --prefix "$MBP_REPO" --silent 2>/dev/null
+  fi
+
   # Check schema migration
   state_check_schema
 
@@ -339,6 +345,95 @@ cmd_update() {
   fi
 }
 
+# === cmd_ssh ===
+cmd_ssh() {
+  local ssh_dir="${HOME}/.ssh"
+  mkdir -p "$ssh_dir"
+
+  # Discover existing private keys
+  local keys_json="["
+  local first=true
+  for key in "$ssh_dir"/*; do
+    [ -f "$key" ] || continue
+    [[ "$key" == *.pub ]] && continue
+    [[ "$(basename "$key")" == "known_hosts"* ]] && continue
+    [[ "$(basename "$key")" == "authorized_keys" ]] && continue
+    [[ "$(basename "$key")" == "config"* ]] && continue
+    [[ "$(basename "$key")" == "environment" ]] && continue
+
+    local name; name="$(basename "$key")"
+    local key_type="" key_bits=""
+    if [ -f "${key}.pub" ]; then
+      key_type=$(ssh-keygen -l -f "${key}.pub" 2>/dev/null | awk '{print $4}' | tr -d '()')
+      key_bits=$(ssh-keygen -l -f "${key}.pub" 2>/dev/null | awk '{print $1}')
+    fi
+
+    [ "$first" = true ] || keys_json+=","
+    first=false
+    keys_json+="{\"name\":\"${name}\",\"type\":\"${key_type}\",\"bits\":\"${key_bits}\"}"
+  done
+  keys_json+="]"
+
+  if ! mbp_has_node_prompts; then
+    printf "Node.js prompts not available. Run ${MBP_COLOR_BRAND}mbp setup${MBP_COLOR_RESET} first.\n"
+    return 1
+  fi
+
+  local tmpfile; tmpfile=$(mktemp)
+  if ! node "$MBP_REPO/bin/mbp-prompts.mjs" --output "$tmpfile" ssh-keys "$keys_json"; then
+    rm -f "$tmpfile"
+    return 1
+  fi
+
+  if [ ! -s "$tmpfile" ]; then
+    rm -f "$tmpfile"
+    return 1
+  fi
+
+  local result; result=$(<"$tmpfile")
+  rm -f "$tmpfile"
+
+  local action; action=$(printf '%s' "$result" | jq -r '.action')
+  local name; name=$(printf '%s' "$result" | jq -r '.name')
+
+  if [ "$action" = "show" ]; then
+    local pub_file="${ssh_dir}/${name}.pub"
+    if [ -f "$pub_file" ]; then
+      printf "\n${MBP_COLOR_BOLD}Public key (%s):${MBP_COLOR_RESET}\n\n" "$name"
+      cat "$pub_file"
+      printf "\n"
+
+      # Copy to clipboard on macOS
+      if command -v pbcopy >/dev/null 2>&1; then
+        pbcopy < "$pub_file"
+        printf "${MBP_COLOR_SUCCESS}✓${MBP_COLOR_RESET}  Copied to clipboard\n\n"
+      fi
+    else
+      printf "\n${MBP_COLOR_WARN}⚠${MBP_COLOR_RESET}  No .pub file found for %s\n\n" "$name"
+    fi
+  elif [ "$action" = "create" ]; then
+    local email; email=$(printf '%s' "$result" | jq -r '.email')
+    local key_path="${ssh_dir}/${name}"
+
+    if [ -f "$key_path" ]; then
+      printf "\n${MBP_COLOR_ERROR}✗${MBP_COLOR_RESET}  Key already exists: %s\n\n" "$key_path"
+      return 1
+    fi
+
+    ssh-keygen -t ed25519 -C "$email" -f "$key_path"
+
+    if [ -f "${key_path}.pub" ]; then
+      printf "\n${MBP_COLOR_BOLD}Public key:${MBP_COLOR_RESET}\n\n"
+      cat "${key_path}.pub"
+      printf "\n"
+      if command -v pbcopy >/dev/null 2>&1; then
+        pbcopy < "${key_path}.pub"
+        printf "${MBP_COLOR_SUCCESS}✓${MBP_COLOR_RESET}  Copied to clipboard\n\n"
+      fi
+    fi
+  fi
+}
+
 # === cmd_status ===
 cmd_status() {
   printf "\n${MBP_COLOR_BRAND}${MBP_COLOR_BOLD}mbp status${MBP_COLOR_RESET} v%s\n\n" "$MBP_VERSION"
@@ -376,6 +471,7 @@ main() {
     audit)   cmd_audit "$@" ;;
     tour)    cmd_tour "$@" ;;
     update)  cmd_update "$@" ;;
+    ssh)     cmd_ssh "$@" ;;
     status)  cmd_status "$@" ;;
     --version|-v) printf "mbp v%s\n" "$MBP_VERSION" ;;
     --help|-h|help|"") usage ;;
