@@ -91,6 +91,26 @@ elif [ -f "$OP_CONF" ]; then
   mbp_log_step "1Password agent not found — removed stale config"
 fi
 
+# Add all discovered keys to the agent with Keychain persistence
+# This stores passphrases in macOS Keychain so they survive reboots
+if [ "$KEY_COUNT" -gt 0 ]; then
+  for key in "$SSH_DIR"/*; do
+    [ -f "$key" ] || continue
+    [[ "$key" == *.pub ]] && continue
+    [[ "$(basename "$key")" == "known_hosts"* ]] && continue
+    [[ "$(basename "$key")" == "authorized_keys" ]] && continue
+    [[ "$(basename "$key")" == "config"* ]] && continue
+    [[ "$(basename "$key")" == "environment" ]] && continue
+
+    # --apple-use-keychain stores the passphrase so it persists across sessions
+    if ssh-add --apple-use-keychain "$key" 2>/dev/null; then
+      mbp_log_step "added to agent: $(basename "$key")"
+    else
+      mbp_log_warn "could not add $(basename "$key") to agent — you may need to run: ssh-add --apple-use-keychain $key"
+    fi
+  done
+fi
+
 mbp_log_ok "SSH: $KEY_COUNT keys secured"
 
 state_set_module_ok "ssh"
