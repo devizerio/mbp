@@ -7,7 +7,7 @@ read by humans (and Claude Code).
 ## Architecture
 
 ```
-bin/mbp              — CLI entry point (subcommands: setup, audit, tour, update, status)
+bin/mbp              — CLI entry point (subcommands: setup, audit, ssh, tour, update, status)
 bin/mbp-prompts.mjs  — Node.js interactive prompts (@clack/prompts)
 lib/
   core.sh            — logging, color, idempotency helpers, mbp_run_module, module path resolution
@@ -20,8 +20,8 @@ modules/
   03-shell.sh        — Oh My Zsh, default shell         [migrates state to JSON]
   04-mise.sh         — runtime version manager (replaces asdf)
   05-dotfiles.sh     — symlink dotfiles, create ~/.zshrc.local
-  06-git.sh          — gh credential helper, optional GPG signing
-  07-ssh.sh          — key permissions, config.d directory
+  06-git.sh          — gh credential helper, SSH commit signing
+  07-ssh.sh          — key permissions, config.d directory, Keychain persistence
   08-secrets.sh      — 1Password CLI
   09-docker.sh       — Docker Desktop
   10-ai-tools.sh     — Claude Code + gstack
@@ -30,7 +30,7 @@ modules/
   13-dev-dirs.sh     — ~/.mbp infrastructure dirs
 dotfiles/
   zshrc              — Oh My Zsh config, mise activation, client() helper
-  gitconfig          — git identity, gh credential, GPG signing stub
+  gitconfig          — git identity, gh credential, SSH signing config
   ssh-config         — 1Password agent, github.com host, config.d Include
   tool-versions      — global mise runtimes
   vimrc              — minimal vim config
