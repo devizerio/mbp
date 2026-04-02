@@ -3,7 +3,7 @@
 **A MacBook Pro setup script for the modern developer.** Built by [Devizer](https://devizer.io).
 
 One command takes a bare Mac from factory reset to fully provisioned — with
-mise runtimes, AI tools, per-client isolation, and drift detection that keeps
+mise runtimes, AI tools, SSH key management, and drift detection that keeps
 everything honest.
 
 ```
@@ -14,22 +14,24 @@ bash <(curl -fsSL https://raw.githubusercontent.com/devizerio/mbp/main/install.s
 
 ## What it does
 
-mbp runs 13 setup modules in sequence:
+On first run, an interactive module picker lets you choose what to install.
+Your selection is saved so re-runs skip the picker and only install what's
+missing.
 
 | # | Module | What it sets up |
 |---|--------|----------------|
 | 01 | xcode | Xcode Command Line Tools |
-| 02 | homebrew | Homebrew + all packages from your profile |
+| 02 | homebrew | Homebrew + packages from Brewfiles |
 | 03 | shell | Oh My Zsh, Homebrew zsh as default shell |
-| 04 | mise | Runtime version manager (Node, Ruby, Python, …) |
+| 04 | mise | Runtime version manager (Node, Ruby, Python, Bun) |
 | 05 | dotfiles | zshrc, gitconfig, ssh-config, vimrc (symlinked) |
-| 06 | git | GitHub CLI credential helper, optional GPG signing |
-| 07 | ssh | Key permissions, config.d include pattern |
+| 06 | git | GitHub CLI credential helper, SSH commit signing |
+| 07 | ssh | Key permissions, config.d include pattern, Keychain persistence |
 | 08 | secrets | 1Password CLI |
 | 09 | docker | Docker Desktop |
 | 10 | ai-tools | Claude Code + gstack skills |
-| 11 | macos-defaults | Dock, Finder, keyboard, screenshots |
-| 12 | apps | Verify cask installations |
+| 11 | macos-defaults | Dock, Finder, keyboard, screenshots, widgets |
+| 12 | apps | Verify cask installations + VS Code CLI |
 | 13 | dev-dirs | `~/Developer` structure, `~/.mbp` dirs |
 
 Each module is **idempotent** — run `mbp setup` again at any time to install
@@ -37,31 +39,12 @@ what's missing and skip what's already done.
 
 ---
 
-## Profiles
-
-A profile is a `.conf` file that controls which modules run and which
-packages install.
-
-```
-profiles/
-  devizer-full.conf     — full Devizer stack
-  client-minimal.conf   — stripped-down client machine
-  personal.conf         — full stack + personal tools
-```
-
-Run a specific profile:
-
-```bash
-mbp setup --profile personal
-```
-
----
-
 ## CLI reference
 
 ```
-mbp setup [--profile NAME] [--module NAME] [--force]
+mbp setup [--module NAME] [--force]
 mbp audit
+mbp ssh
 mbp status
 mbp tour
 mbp update
@@ -69,12 +52,24 @@ mbp --version
 mbp --help
 ```
 
+### `mbp setup`
+
+Provisions the machine. On first run you'll see an interactive picker to
+choose which modules to install (xcode and homebrew are always required).
+On subsequent runs, your saved selection is used.
+
+```bash
+mbp setup                          # run all selected modules
+mbp setup --module mise            # run only the mise module
+mbp setup --module mise --force    # re-run even if already completed
+```
+
 ### `mbp audit`
 
 Checks for drift between what mbp set up and the current state:
 
 - **Homebrew** — missing packages from Brewfiles
-- **mise** — runtimes not matching profile versions
+- **mise** — runtimes not matching expected versions
 - **Dotfiles** — symlinks broken or files modified since setup
 - **macOS defaults** — settings that have changed since setup
 
@@ -87,18 +82,38 @@ $ mbp audit
   1 issue found.
 ```
 
+### `mbp ssh`
+
+Interactive SSH key manager — list existing keys, view public keys, or
+create new ones with sensible defaults (Ed25519, Keychain persistence).
+
 ### `mbp tour`
 
-An interactive walkthrough of everything that was installed — filtered to
-your active profile. Press Enter to advance through each section.
+An interactive walkthrough of everything that was installed. Press Enter
+to advance through each section.
 
-```
-$ mbp tour
-```
+### `mbp status`
+
+Shows the state of each module (ok, error, or not run) and when mbp last ran.
+
+### `mbp update`
+
+Pulls the latest version from GitHub and optionally re-runs setup for any
+new or updated modules.
 
 ---
 
 ## How it works
+
+### Interactive module selection
+
+The first time you run `mbp setup`, a picker lets you choose which modules
+to install. Uses [@clack/prompts](https://github.com/bombshell-dev/clack)
+for a rich terminal UI when Node.js is available, falling back to plain
+bash prompts on fresh Macs.
+
+The selection is saved to `~/.mbp/selected_modules.txt` and later migrated
+into `~/.mbp/state.json`.
 
 ### State tracking
 
@@ -108,8 +123,6 @@ module is skipped on re-runs unless you pass `--force`.
 ```bash
 MBP_FORCE=1 mbp setup --module mise   # re-run just mise
 ```
-
-The state file also records which client is active and when mbp last ran.
 
 ### Bootstrap problem
 
@@ -132,16 +145,6 @@ mbp symlinks dotfiles from the repo to `~`:
 Originals are backed up to `~/.mbp/backups/dotfiles-YYYYMMDD-HHMMSS/`
 before symlinking. Personal overrides go in `~/.zshrc.local` (gitignored).
 
-### Self-updating
-
-```bash
-mbp update
-```
-
-Pulls the latest version from GitHub and optionally re-runs setup for
-any new modules. `state_check_schema` migrates the state file if the
-schema version changed.
-
 ---
 
 ## Installing on a fresh Mac
@@ -155,13 +158,14 @@ The install script:
 1. Installs Xcode CLT if needed (git prerequisite)
 2. Clones this repo to `~/.mbp/repo`
 3. Adds `mbp` to your PATH via `~/.zprofile`
-4. Runs `mbp setup --profile devizer-full`
+4. Installs Node.js dependencies for interactive prompts (if npm available)
+5. Runs `mbp setup` (you choose which modules to install)
 
 ### Environment variables
 
 ```bash
-MBP_PROFILE=personal bash <(curl ...)   # use a different profile
 MBP_REPO=~/code/mbp bash <(curl ...)    # clone to a custom path
+MBP_BRANCH=dev bash <(curl ...)          # use a different branch
 ```
 
 ---
@@ -177,26 +181,26 @@ MBP_REPO=~/code/mbp bash <(curl ...)    # clone to a custom path
 ## Project structure
 
 ```
-bin/mbp              — CLI entry point
+bin/mbp              — CLI entry point (subcommands: setup, audit, ssh, tour, update, status)
+bin/mbp-prompts.mjs  — Node.js interactive prompts (@clack/prompts)
 lib/
   core.sh            — logging, colors, idempotency helpers
   platform.sh        — macOS version and architecture detection
   state.sh           — state read/write (plain-text + JSON)
-  profile.sh         — profile parser
   audit.sh           — drift detection
-  client.sh          — client environment management
 modules/
   01-xcode.sh … 13-dev-dirs.sh
 dotfiles/
   zshrc  gitconfig  ssh-config  tool-versions  vimrc
-profiles/
-  devizer-full.conf  client-minimal.conf  personal.conf
 brewfiles/
-  Brewfile.core  Brewfile.dev  Brewfile.ai  Brewfile.apps  Brewfile.personal
+  Brewfile.core      — essentials every machine needs
+  Brewfile.dev       — developer tools (mise, bun, docker, VS Code, cloud CLIs)
+  Brewfile.ai        — AI tooling (bundled if ai-tools module selected)
+  Brewfile.apps      — desktop applications (bundled if apps module selected)
 tour/
-  steps.sh
-  content/  01-homebrew.md … 09-mbp-client.md
-install.sh
+  steps.sh           — interactive walkthrough
+  content/           — markdown content shown during the tour
+install.sh           — bootstrap script for fresh Macs
 ```
 
 ---
